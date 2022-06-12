@@ -5,33 +5,21 @@ pub const fn low_bits_mask(n: u32) -> u32 {
     (1u32 << n) - 1
 }
 
+const HIGHEST_BIT: usize = (u32::BITS - 1) as usize;
+
 const PAYLOAD_BITS: u32 = 21;
 const ECC_BITS: u32 = 10;
 const PARITY_BITS: u32 = 1;
 
-const PAYLOAD_MASK: u32 = !low_bits_mask(ECC_BITS + PARITY_BITS);
 const ECC_MASK: u32 = low_bits_mask(ECC_BITS);
+const PAYLOAD_MASK: u32 = !low_bits_mask(ECC_BITS + PARITY_BITS);
 
 const fn bit_set(word: u32, n: usize) -> bool {
     word & (1 << n) > 0
 }
 
-const fn leading_bit(word: u32) -> bool {
-    bit_set(word, 31)
-}
-
-pub fn bits_ms(mut word: u32) -> impl Iterator<Item = bool> {
-    let mut count = 0;
-    std::iter::from_fn(move || {
-        let bit = leading_bit(word);
-        word <<= 1;
-        if count < u32::BITS {
-            count += 1;
-            Some(bit)
-        } else {
-            None
-        }
-    })
+pub fn bits_ms(word: u32) -> impl Iterator<Item = bool> {
+    (0..32).rev().map(move |n| bit_set(word, n))
 }
 
 pub fn from_bits(bits: impl Iterator<Item = bool>) -> u32 {
@@ -43,7 +31,7 @@ pub fn bch_encode(cw: u32) -> u32 {
 
     // Calculate BCH bits
     for _ in 0..PAYLOAD_BITS {
-        if leading_bit(cw_e) {
+        if bit_set(cw_e, HIGHEST_BIT) {
             cw_e ^= 0xED_20_00_00;
         }
         cw_e <<= 1;
