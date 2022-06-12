@@ -28,11 +28,7 @@ pub fn bch_encode(cw: u32) -> u32 {
     let parity = local_cw.count_ones();
 
     // apply parity bit
-    return if parity % 2 != 0 {
-        local_cw | 1
-    } else {
-        local_cw
-    };
+    local_cw | (parity % 2)
 }
 
 // Debug options for error correction
