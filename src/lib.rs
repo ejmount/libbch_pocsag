@@ -47,6 +47,72 @@ pub fn bch_encode(cw: u32) -> u32 {
     local_cw | (parity % 2)
 }
 
+fn bit_decoder(syndrome: &mut u32) -> impl FnMut(bool) -> bool + '_ {
+    move |bit| {
+        println!("    xbit:{}  synd:{:08X}", bit, syndrome);
+
+        let output;
+        if (*syndrome == 0x3B4) ||		// 0x3B4: Syndrome when a single error is detected in the MSB
+			    (*syndrome == 0x26E)	||		// 0x26E: Two adjacent errors
+			    (*syndrome == 0x359) ||		// 0x359: Two errors, one OK bit between
+			    (*syndrome == 0x076) ||		// 0x076: Two errors, two OK bits between
+			    (*syndrome == 0x255) ||		// 0x255: Two errors, three OK bits between
+			    (*syndrome == 0x0F0) ||		// 0x0F0: Two errors, four OK bits between
+			    (*syndrome == 0x216) ||		// ... and so on
+			    (*syndrome == 0x365) ||
+			    (*syndrome == 0x068) ||
+			    (*syndrome == 0x25A) ||
+			    (*syndrome == 0x343) ||
+			    (*syndrome == 0x07B) ||
+			    (*syndrome == 0x1E7) ||
+			    (*syndrome == 0x129) ||
+			    (*syndrome == 0x14E) ||
+			    (*syndrome == 0x2C9) ||
+			    (*syndrome == 0x0BE) ||
+			    (*syndrome == 0x231) ||
+			    (*syndrome == 0x0C2) ||
+			    (*syndrome == 0x20F) ||
+			    (*syndrome == 0x0DD) ||
+			    (*syndrome == 0x1B4) ||
+			    (*syndrome == 0x2B4) ||
+			    (*syndrome == 0x334) ||
+			    (*syndrome == 0x3F4) ||
+			    (*syndrome == 0x394) ||
+			    (*syndrome == 0x3A4) ||
+			    (*syndrome == 0x3BC) ||
+			    (*syndrome == 0x3B0) ||
+			    (*syndrome == 0x3B6) ||
+			    (*syndrome == 0x3B5)
+        {
+            // Syndrome matches an error in the MSB
+            // Correct that error and adjust the syndrome to account for it
+            *syndrome ^= 0x3B4;
+
+            output = !bit;
+
+            println!("  E"); // indicate that an error was corrected in this bit
+        } else {
+            // no error
+            output = bit;
+
+            println!("   \n");
+        }
+
+        // Handle Syndrome shift register feedback
+        if bit_set(*syndrome, ECC_BITS - PARITY_BITS) {
+            *syndrome <<= 1;
+            *syndrome ^= 0x769; // 0x769 = POCSAG generator polynomial -- x^10 + x^9 + x^8 + x^6 + x^5 + x^3 + 1
+        } else {
+            *syndrome <<= 1;
+        }
+        // mask off bits which fall off the end of the syndrome shift register
+        *syndrome &= low_bits_mask(ECC_BITS + PARITY_BITS);
+
+        output
+        // XXX Possible optimisation: Can we exit early if the syndrome is zero? (no more errors to correct)
+    }
+}
+
 // Debug options for error correction
 // -- Enable debug
 //#define BCH_REPAIR_DEBUG
@@ -69,73 +135,10 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
     println!("cw:{:08X}  syndrome:{:08X}", cw, syndrome);
 
     // --- Meggitt decoder ---
-    // Calculate BCH bits
+    // Calculate repaired codeword
     let result = bits_ms(cw)
         .take((PAYLOAD_BITS + ECC_BITS) as usize)
-        .map(|bit| {
-            println!("    xbit:{}  synd:{:08X}", bit, syndrome);
-
-            // produce the next corrected bit in the high bit of the result
-            let output;
-            if (syndrome == 0x3B4) ||		// 0x3B4: Syndrome when a single error is detected in the MSB
-			(syndrome == 0x26E)	||		// 0x26E: Two adjacent errors
-			(syndrome == 0x359) ||		// 0x359: Two errors, one OK bit between
-			(syndrome == 0x076) ||		// 0x076: Two errors, two OK bits between
-			(syndrome == 0x255) ||		// 0x255: Two errors, three OK bits between
-			(syndrome == 0x0F0) ||		// 0x0F0: Two errors, four OK bits between
-			(syndrome == 0x216) ||		// ... and so on
-			(syndrome == 0x365) ||
-			(syndrome == 0x068) ||
-			(syndrome == 0x25A) ||
-			(syndrome == 0x343) ||
-			(syndrome == 0x07B) ||
-			(syndrome == 0x1E7) ||
-			(syndrome == 0x129) ||
-			(syndrome == 0x14E) ||
-			(syndrome == 0x2C9) ||
-			(syndrome == 0x0BE) ||
-			(syndrome == 0x231) ||
-			(syndrome == 0x0C2) ||
-			(syndrome == 0x20F) ||
-			(syndrome == 0x0DD) ||
-			(syndrome == 0x1B4) ||
-			(syndrome == 0x2B4) ||
-			(syndrome == 0x334) ||
-			(syndrome == 0x3F4) ||
-			(syndrome == 0x394) ||
-			(syndrome == 0x3A4) ||
-			(syndrome == 0x3BC) ||
-			(syndrome == 0x3B0) ||
-			(syndrome == 0x3B6) ||
-			(syndrome == 0x3B5)
-            {
-                // Syndrome matches an error in the MSB
-                // Correct that error and adjust the syndrome to account for it
-                syndrome ^= 0x3B4;
-
-                output = !bit;
-
-                println!("  E"); // indicate that an error was corrected in this bit
-            } else {
-                // no error
-                output = bit;
-
-                println!("   \n");
-            }
-
-            // Handle Syndrome shift register feedback
-            if bit_set(syndrome, ECC_BITS - PARITY_BITS) {
-                syndrome <<= 1;
-                syndrome ^= 0x769; // 0x769 = POCSAG generator polynomial -- x^10 + x^9 + x^8 + x^6 + x^5 + x^3 + 1
-            } else {
-                syndrome <<= 1;
-            }
-            // mask off bits which fall off the end of the syndrome shift register
-            syndrome &= low_bits_mask(ECC_BITS + PARITY_BITS);
-
-            output
-            // XXX Possible optimisation: Can we exit early if the syndrome is zero? (no more errors to correct)
-        });
+        .map(bit_decoder(&mut syndrome));
 
     let result = from_bits(result) << PARITY_BITS;
 
