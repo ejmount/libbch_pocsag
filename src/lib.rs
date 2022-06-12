@@ -58,21 +58,17 @@ fn bit_decoder(syndrome: &mut u32) -> impl FnMut(bool) -> bool + '_ {
     move |bit| {
         println!("    xbit:{}  synd:{:08X}", bit, syndrome);
 
-        let output;
-        if SYNDROME_ERRORS.iter().find(|&s| s == syndrome).is_some() {
+        let output = if SYNDROME_ERRORS.iter().find(|&s| s == syndrome).is_some() {
             // Syndrome matches an error in the MSB
             // Correct that error and adjust the syndrome to account for it
             *syndrome ^= 0x3B4;
-
-            output = !bit;
-
-            println!("  E"); // indicate that an error was corrected in this bit
+            dbg!("  E"); // indicate that an error was corrected in this bit
+            !bit
         } else {
             // no error
-            output = bit;
-
             println!("   \n");
-        }
+            bit
+        };
 
         // Handle Syndrome shift register feedback
         if bit_set(*syndrome, ECC_BITS - PARITY_BITS) {
@@ -89,12 +85,6 @@ fn bit_decoder(syndrome: &mut u32) -> impl FnMut(bool) -> bool + '_ {
     }
 }
 
-// Debug options for error correction
-// -- Enable debug
-//#define BCH_REPAIR_DEBUG
-// -- Enable printing the output of the ECC process step-by-step
-//#define BCH_REPAIR_DEBUG_STEPBYSTEP
-
 pub fn bch_repair(cw: u32) -> Result<u32, ()> {
     // calculate syndrome
     // We do this by recalculating the BCH parity bits and XORing them against the received ones
@@ -107,30 +97,25 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
         return Ok(cw);
     }
 
-    #[cfg(test)]
-    println!("cw:{:08X}  syndrome:{:08X}", cw, syndrome);
+    dbg!("cw:{:08X}  syndrome:{:08X}", cw, syndrome);
 
     // --- Meggitt decoder ---
     // Calculate repaired codeword
-    let result = bits_ms(cw)
+    let result_bits = bits_ms(cw)
         .take((PAYLOAD_BITS + ECC_BITS) as usize)
         .map(bit_decoder(&mut syndrome));
 
-    let result = from_bits(result) << PARITY_BITS;
+    let result = from_bits(result_bits) << PARITY_BITS;
 
-    println!(
-        "  orig:{:08X}  fixed:{:08X}  {}",
-        cw,                                       /* original codeword */
-        result,                                   /* corrected codeword sans parity bit */
-        if syndrome == 0 { "OK" } else { "ERR" }  /* syndrome == 0 if error was corrected */
-    );
+    let msg = if syndrome == 0 { "OK" } else { "ERR" };
+    dbg!("  orig:{cw:08X}  fixed:{result:08X}  {msg}");
 
     // Check if error correction was successful
     if syndrome == 0 {
         Ok(result)
     } else {
         // Syndrome nonzero at end indicates uncorrectable errors
-        println!("nonzero syndrome at end");
+        dbg!("nonzero syndrome at end");
         Err(())
     }
 }
