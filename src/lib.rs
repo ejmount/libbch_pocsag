@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod test;
 
+const HIGH_BIT_MASK: u32 = 1 << (u32::BITS - 1);
+
 const PAYLOAD_BITS: u32 = 21;
 const PAYLOAD_MASK: u32 = {
     // Payload is most significant
@@ -14,14 +16,18 @@ const ECC_MASK: u32 = {
     (1u32 << ECC_BITS) - 1
 };
 
+
+fn leading_bit(word: u32) -> bool {
+    word & HIGH_BIT_MASK > 0
+}
 pub fn bch_encode(cw: u32) -> u32 {
     let mut local_cw = cw & PAYLOAD_MASK; // mask off BCH parity and even parity
     let mut cw_e = local_cw;
 
     // Calculate BCH bits
     for _ in 0..PAYLOAD_BITS {
-        if (cw_e & 0x80000000) != 0 {
-            cw_e ^= 0xED200000;
+        if leading_bit(cw_e) {
+            cw_e ^= 0xED_20_00_00;
         }
         cw_e <<= 1;
     }
@@ -54,6 +60,7 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
         return Ok(cw);
     }
 
+    #[cfg(test)]
     println!("cw:{:08X}  syndrome:{:08X}", cw, syndrome);
 
     // --- Meggitt decoder ---
