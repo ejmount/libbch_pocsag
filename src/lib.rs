@@ -16,6 +16,10 @@ const HIGH_BIT_MASK: u32 = 1 << (u32::BITS - 1);
 fn leading_bit(word: u32) -> bool {
     word & HIGH_BIT_MASK > 0
 }
+
+pub fn from_bits(bits: impl Iterator<Item = bool>) -> u32 {
+    bits.fold(0, |t, n| (t << 1) | (n as u32))
+}
 pub fn bch_encode(cw: u32) -> u32 {
     let mut local_cw = cw & PAYLOAD_MASK; // mask off BCH parity and even parity
     let mut cw_e = local_cw;
@@ -65,7 +69,7 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
     let mut damaged_cw = cw;
 
     // Calculate BCH bits
-    for xbit in 0..(PAYLOAD_BITS + ECC_BITS) {
+    let result = (0..(PAYLOAD_BITS + ECC_BITS)).map(|xbit| {
         println!(
             "    xbit:{}  synd:{:08X}  dcw:{:08X}  fixed:{:08X}",
             xbit, syndrome, damaged_cw, result
@@ -131,9 +135,11 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
         // mask off bits which fall off the end of the syndrome shift register
         syndrome &= low_bits_mask(ECC_BITS + PARITY_BITS);
 
-        result |= if output { 1 << PARITY_BITS } else { 0 };
+        output
         // XXX Possible optimisation: Can we exit early if the syndrome is zero? (no more errors to correct)
-    }
+    });
+
+    let result = from_bits(result) << PARITY_BITS;
 
     println!(
         "  orig:{:08X}  fixed:{:08X}  {}",
