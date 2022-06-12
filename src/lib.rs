@@ -14,7 +14,7 @@ pub fn bch_encode(cw: u32) -> u32 {
     let mut cw_e = local_cw;
 
     // Calculate BCH bits
-    for _ in 1..=21 {
+    for _ in 0..PAYLOAD_BITS {
         if (cw_e & 0x80000000) != 0 {
             cw_e ^= 0xED200000;
         }
