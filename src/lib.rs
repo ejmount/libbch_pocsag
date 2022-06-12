@@ -1,15 +1,21 @@
 #[cfg(test)]
 mod test;
 
-pub const fn low_bits_mask(n: u32) -> u32 {
-    (1u32 << n) - 1
-}
+const SYNDROME_ERRORS: &[u32] = &[
+    0x3B4, 0x26E, 0x359, 0x076, 0x255, 0x0F0, 0x216, 0x365, 0x068, 0x25A, 0x343, 0x07B, 0x1E7,
+    0x129, 0x14E, 0x2C9, 0x0BE, 0x231, 0x0C2, 0x20F, 0x0DD, 0x1B4, 0x2B4, 0x334, 0x3F4, 0x394,
+    0x3A4, 0x3BC, 0x3B0, 0x3B6, 0x3B5,
+];
 
 const HIGHEST_BIT: u32 = u32::BITS - 1;
 
 const PAYLOAD_BITS: u32 = 21;
 const ECC_BITS: u32 = 10;
 const PARITY_BITS: u32 = 1;
+
+pub const fn low_bits_mask(n: u32) -> u32 {
+    (1u32 << n) - 1
+}
 
 const ECC_MASK: u32 = low_bits_mask(ECC_BITS);
 const PAYLOAD_MASK: u32 = !low_bits_mask(ECC_BITS + PARITY_BITS);
@@ -52,38 +58,7 @@ fn bit_decoder(syndrome: &mut u32) -> impl FnMut(bool) -> bool + '_ {
         println!("    xbit:{}  synd:{:08X}", bit, syndrome);
 
         let output;
-        if (*syndrome == 0x3B4) ||		// 0x3B4: Syndrome when a single error is detected in the MSB
-			    (*syndrome == 0x26E)	||		// 0x26E: Two adjacent errors
-			    (*syndrome == 0x359) ||		// 0x359: Two errors, one OK bit between
-			    (*syndrome == 0x076) ||		// 0x076: Two errors, two OK bits between
-			    (*syndrome == 0x255) ||		// 0x255: Two errors, three OK bits between
-			    (*syndrome == 0x0F0) ||		// 0x0F0: Two errors, four OK bits between
-			    (*syndrome == 0x216) ||		// ... and so on
-			    (*syndrome == 0x365) ||
-			    (*syndrome == 0x068) ||
-			    (*syndrome == 0x25A) ||
-			    (*syndrome == 0x343) ||
-			    (*syndrome == 0x07B) ||
-			    (*syndrome == 0x1E7) ||
-			    (*syndrome == 0x129) ||
-			    (*syndrome == 0x14E) ||
-			    (*syndrome == 0x2C9) ||
-			    (*syndrome == 0x0BE) ||
-			    (*syndrome == 0x231) ||
-			    (*syndrome == 0x0C2) ||
-			    (*syndrome == 0x20F) ||
-			    (*syndrome == 0x0DD) ||
-			    (*syndrome == 0x1B4) ||
-			    (*syndrome == 0x2B4) ||
-			    (*syndrome == 0x334) ||
-			    (*syndrome == 0x3F4) ||
-			    (*syndrome == 0x394) ||
-			    (*syndrome == 0x3A4) ||
-			    (*syndrome == 0x3BC) ||
-			    (*syndrome == 0x3B0) ||
-			    (*syndrome == 0x3B6) ||
-			    (*syndrome == 0x3B5)
-        {
+        if SYNDROME_ERRORS.iter().find(|&s| s == syndrome).is_some() {
             // Syndrome matches an error in the MSB
             // Correct that error and adjust the syndrome to account for it
             *syndrome ^= 0x3B4;
@@ -150,12 +125,11 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
     );
 
     // Check if error correction was successful
-    if syndrome != 0 {
+    if syndrome == 0 {
+        Ok(result)
+    } else {
         // Syndrome nonzero at end indicates uncorrectable errors
         println!("nonzero syndrome at end");
-        return Err(());
+        Err(())
     }
-
-    // Syndrome is zero -- that means we must have succeeded!
-    Ok(result)
 }
