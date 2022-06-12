@@ -109,12 +109,20 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
             // Correct that error and adjust the syndrome to account for it
             syndrome ^= 0x3B4;
 
-            result |= (!damaged_cw & 0x80000000) >> 30;
+            result |= if !leading_bit(damaged_cw) {
+                1 << PARITY_BITS
+            } else {
+                0
+            };
 
             println!("  E"); // indicate that an error was corrected in this bit
         } else {
             // no error
-            result |= (damaged_cw & 0x80000000) >> 30;
+            result |= if leading_bit(damaged_cw) {
+                1 << PARITY_BITS
+            } else {
+                0
+            };
 
             println!("   \n");
         }
