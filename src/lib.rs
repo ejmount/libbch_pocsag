@@ -8,6 +8,11 @@ const PAYLOAD_MASK: u32 = {
     let non_payload_mask = (1u32 << non_payload_bits) - 1;
     u32::MAX - non_payload_mask
 };
+const ECC_BITS: u32 = 10;
+const ECC_MASK: u32 = {
+    // ECC is least significant
+    (1u32 << ECC_BITS) - 1
+};
 
 pub fn bch_encode(cw: u32) -> u32 {
     let mut local_cw = cw & PAYLOAD_MASK; // mask off BCH parity and even parity
@@ -42,7 +47,7 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
     // We do this by recalculating the BCH parity bits and XORing them against the received ones
 
     // mask off data bits and parity, leaving the error syndrome in the LSB
-    let mut syndrome = ((bch_encode(cw) ^ cw) >> 1) & 0x3FF;
+    let mut syndrome = ((bch_encode(cw) ^ cw) >> 1) & ECC_MASK;
 
     if syndrome == 0 {
         // Syndrome of zero indicates no repair required
@@ -57,7 +62,7 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
     let mut damaged_cw = cw;
 
     // Calculate BCH bits
-    for xbit in 0..31 {
+    for xbit in 0..(PAYLOAD_BITS + ECC_BITS) {
         println!(
             "    xbit:{}  synd:{:08X}  dcw:{:08X}  fixed:{:08X}",
             xbit, syndrome, damaged_cw, result
