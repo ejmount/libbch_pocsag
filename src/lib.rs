@@ -1,9 +1,16 @@
 #[cfg(test)]
 mod test;
 
+const PAYLOAD_BITS: u32 = 21;
+const PAYLOAD_MASK: u32 = {
+    // Payload is most significant
+    let non_payload_bits = u32::BITS - PAYLOAD_BITS;
+    let non_payload_mask = (1u32 << non_payload_bits) - 1;
+    u32::MAX - non_payload_mask
+};
+
 pub fn bch_encode(cw: u32) -> u32 {
-    let mut parity = 0;
-    let mut local_cw = cw & 0xFFFFF800; // mask off BCH parity and even parity
+    let mut local_cw = cw & PAYLOAD_MASK; // mask off BCH parity and even parity
     let mut cw_e = local_cw;
 
     // Calculate BCH bits
@@ -13,20 +20,12 @@ pub fn bch_encode(cw: u32) -> u32 {
         }
         cw_e <<= 1;
     }
-    local_cw |= cw_e >> 21;
+    local_cw |= cw_e >> PAYLOAD_BITS;
 
     // At this point local_cw contains a codeword with BCH but no parity
 
     // Calculate parity bit
-    cw_e = local_cw;
-    let mut bit = 32;
-    while (cw_e != 0) && (bit > 0) {
-        if (cw_e & 1) != 0 {
-            parity += 1;
-        }
-        cw_e >>= 1;
-        bit -= 1;
-    }
+    let parity = local_cw.count_ones();
 
     // apply parity bit
     return if parity % 2 != 0 {
