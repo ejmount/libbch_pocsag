@@ -1,21 +1,17 @@
 #[cfg(test)]
 mod test;
 
-const HIGH_BIT_MASK: u32 = 1 << (u32::BITS - 1);
+pub const fn low_bits_mask(n: u32) -> u32 {
+    (1u32 << n) - 1
+}
 
 const PAYLOAD_BITS: u32 = 21;
-const PAYLOAD_MASK: u32 = {
-    // Payload is most significant
-    let non_payload_bits = u32::BITS - PAYLOAD_BITS;
-    let non_payload_mask = (1u32 << non_payload_bits) - 1;
-    u32::MAX - non_payload_mask
-};
 const ECC_BITS: u32 = 10;
-const ECC_MASK: u32 = {
-    // ECC is least significant
-    (1u32 << ECC_BITS) - 1
-};
+const PARITY_BITS: u32 = 1;
 
+const PAYLOAD_MASK: u32 = !low_bits_mask(ECC_BITS + PARITY_BITS);
+const ECC_MASK: u32 = low_bits_mask(ECC_BITS);
+const HIGH_BIT_MASK: u32 = 1 << (u32::BITS - 1);
 
 fn leading_bit(word: u32) -> bool {
     word & HIGH_BIT_MASK > 0
@@ -132,7 +128,7 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
             syndrome <<= 1;
         }
         // mask off bits which fall off the end of the syndrome shift register
-        syndrome &= 0x3FF;
+        syndrome &= low_bits_mask(ECC_BITS + PARITY_BITS);
 
         // XXX Possible optimisation: Can we exit early if the syndrome is zero? (no more errors to correct)
     }
