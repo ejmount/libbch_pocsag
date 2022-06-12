@@ -19,6 +19,19 @@ const fn bit_set(word: u32, n: usize) -> bool {
 const fn leading_bit(word: u32) -> bool {
     bit_set(word, 31)
 }
+
+pub fn bits_ms(mut word: u32) -> impl Iterator<Item = bool> {
+    let mut count = 0;
+    std::iter::from_fn(move || {
+        let bit = leading_bit(word);
+        word <<= 1;
+        if count < u32::BITS {
+            count += 1;
+            Some(bit)
+        } else {
+            None
+        }
+    })
 }
 
 pub fn from_bits(bits: impl Iterator<Item = bool>) -> u32 {
@@ -68,21 +81,15 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
     println!("cw:{:08X}  syndrome:{:08X}", cw, syndrome);
 
     // --- Meggitt decoder ---
-
-    let mut result = 0;
-    let mut damaged_cw = cw;
-
     // Calculate BCH bits
-    let result = (0..(PAYLOAD_BITS + ECC_BITS)).map(|xbit| {
-        println!(
-            "    xbit:{}  synd:{:08X}  dcw:{:08X}  fixed:{:08X}",
-            xbit, syndrome, damaged_cw, result
-        );
+    let result = bits_ms(cw)
+        .take((PAYLOAD_BITS + ECC_BITS) as usize)
+        .map(|bit| {
+            println!("    xbit:{}  synd:{:08X}", bit, syndrome);
 
-        // produce the next corrected bit in the high bit of the result
-        result <<= 1;
-        let output;
-        if (syndrome == 0x3B4) ||		// 0x3B4: Syndrome when a single error is detected in the MSB
+            // produce the next corrected bit in the high bit of the result
+            let output;
+            if (syndrome == 0x3B4) ||		// 0x3B4: Syndrome when a single error is detected in the MSB
 			(syndrome == 0x26E)	||		// 0x26E: Two adjacent errors
 			(syndrome == 0x359) ||		// 0x359: Two errors, one OK bit between
 			(syndrome == 0x076) ||		// 0x076: Two errors, two OK bits between
@@ -113,35 +120,34 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
 			(syndrome == 0x3B0) ||
 			(syndrome == 0x3B6) ||
 			(syndrome == 0x3B5)
-        {
-            // Syndrome matches an error in the MSB
-            // Correct that error and adjust the syndrome to account for it
-            syndrome ^= 0x3B4;
+            {
+                // Syndrome matches an error in the MSB
+                // Correct that error and adjust the syndrome to account for it
+                syndrome ^= 0x3B4;
 
-            output = !leading_bit(damaged_cw);
+                output = !bit; // !leading_bit(damaged_cw);
 
-            println!("  E"); // indicate that an error was corrected in this bit
-        } else {
-            // no error
-            output = leading_bit(damaged_cw);
+                println!("  E"); // indicate that an error was corrected in this bit
+            } else {
+                // no error
+                output = bit;
 
-            println!("   \n");
-        }
-        damaged_cw <<= 1;
+                println!("   \n");
+            }
 
-        // Handle Syndrome shift register feedback
-        if syndrome & 0x200 != 0 {
-            syndrome <<= 1;
-            syndrome ^= 0x769; // 0x769 = POCSAG generator polynomial -- x^10 + x^9 + x^8 + x^6 + x^5 + x^3 + 1
-        } else {
-            syndrome <<= 1;
-        }
-        // mask off bits which fall off the end of the syndrome shift register
-        syndrome &= low_bits_mask(ECC_BITS + PARITY_BITS);
+            // Handle Syndrome shift register feedback
+            if syndrome & 0x200 != 0 {
+                syndrome <<= 1;
+                syndrome ^= 0x769; // 0x769 = POCSAG generator polynomial -- x^10 + x^9 + x^8 + x^6 + x^5 + x^3 + 1
+            } else {
+                syndrome <<= 1;
+            }
+            // mask off bits which fall off the end of the syndrome shift register
+            syndrome &= low_bits_mask(ECC_BITS + PARITY_BITS);
 
-        output
-        // XXX Possible optimisation: Can we exit early if the syndrome is zero? (no more errors to correct)
-    });
+            output
+            // XXX Possible optimisation: Can we exit early if the syndrome is zero? (no more errors to correct)
+        });
 
     let result = from_bits(result) << PARITY_BITS;
 
