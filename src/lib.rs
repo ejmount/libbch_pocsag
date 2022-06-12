@@ -41,7 +41,7 @@ pub fn bch_encode(cw: u32) -> u32 {
 // -- Enable printing the output of the ECC process step-by-step
 //#define BCH_REPAIR_DEBUG_STEPBYSTEP
 
-pub fn bch_repair(cw: u32, repaired_cw: &mut u32) -> i32 {
+pub fn bch_repair(cw: u32) -> Result<u32, ()> {
     // calculate syndrome
     // We do this by recalculating the BCH parity bits and XORing them against the received ones
 
@@ -50,8 +50,7 @@ pub fn bch_repair(cw: u32, repaired_cw: &mut u32) -> i32 {
 
     if syndrome == 0 {
         // Syndrome of zero indicates no repair required
-        *repaired_cw = cw;
-        return 0;
+        return Ok(cw);
     }
 
     println!("cw:{:08X}  syndrome:{:08X}", cw, syndrome);
@@ -141,11 +140,9 @@ pub fn bch_repair(cw: u32, repaired_cw: &mut u32) -> i32 {
     if syndrome != 0 {
         // Syndrome nonzero at end indicates uncorrectable errors
         println!("nonzero syndrome at end");
-        *repaired_cw = cw;
-        return -1;
+        return Err(());
     }
 
     // Syndrome is zero -- that means we must have succeeded!
-    *repaired_cw = result;
-    return 0;
+    Ok(result)
 }

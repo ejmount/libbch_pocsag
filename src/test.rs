@@ -30,14 +30,15 @@ fn test_bch_single_bit_errors() {
         while mask > 0 {
             // add damage to the CW
             let damaged_cw = original_cw ^ mask;
-            let mut repaired_cw = 0;
 
-            let result = bch_repair(damaged_cw, &mut repaired_cw);
-            assert_eq!(
-                0, result,
+            let result = bch_repair(damaged_cw);
+            assert!(
+                result.is_ok(),
                 "origCW:{:08X}, errormask:{:08X}",
-                original_cw, mask
+                original_cw,
+                mask
             );
+            let repaired_cw = result.unwrap();
 
             // BCH doesn't repair the parity bit. We're only concerned about repairing errors in the message or BCH parity bits.
             // (So mask off the parity in the LSB)
@@ -78,16 +79,15 @@ fn test_bch_double_bit_errors() {
             {
                 // add damage to the CW
                 let damaged_cw = original_cw ^ mask1 ^ mask2;
-                let mut repaired_cw = 0;
 
-                let result = bch_repair(damaged_cw, &mut repaired_cw);
-                assert_eq!(
-                    0,
-                    result,
+                let result = bch_repair(damaged_cw);
+                assert!(
+                    result.is_ok(),
                     "origCW:{:08X}, errormask:{:08X}",
                     original_cw,
                     mask1 ^ mask2
                 );
+                let repaired_cw = result.unwrap();
 
                 // BCH doesn't repair the parity bit. We're only concerned about repairing errors in the message or BCH parity bits.
                 // (So mask1 off the parity in the LSB)
