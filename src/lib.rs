@@ -73,6 +73,7 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
 
         // produce the next corrected bit in the high bit of the result
         result <<= 1;
+        let output;
         if (syndrome == 0x3B4) ||		// 0x3B4: Syndrome when a single error is detected in the MSB
 			(syndrome == 0x26E)	||		// 0x26E: Two adjacent errors
 			(syndrome == 0x359) ||		// 0x359: Two errors, one OK bit between
@@ -109,20 +110,12 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
             // Correct that error and adjust the syndrome to account for it
             syndrome ^= 0x3B4;
 
-            result |= if !leading_bit(damaged_cw) {
-                1 << PARITY_BITS
-            } else {
-                0
-            };
+            output = !leading_bit(damaged_cw);
 
             println!("  E"); // indicate that an error was corrected in this bit
         } else {
             // no error
-            result |= if leading_bit(damaged_cw) {
-                1 << PARITY_BITS
-            } else {
-                0
-            };
+            output = leading_bit(damaged_cw);
 
             println!("   \n");
         }
@@ -138,6 +131,7 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
         // mask off bits which fall off the end of the syndrome shift register
         syndrome &= low_bits_mask(ECC_BITS + PARITY_BITS);
 
+        result |= if output { 1 << PARITY_BITS } else { 0 };
         // XXX Possible optimisation: Can we exit early if the syndrome is zero? (no more errors to correct)
     }
 
