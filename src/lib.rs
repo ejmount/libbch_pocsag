@@ -11,10 +11,14 @@ const PARITY_BITS: u32 = 1;
 
 const PAYLOAD_MASK: u32 = !low_bits_mask(ECC_BITS + PARITY_BITS);
 const ECC_MASK: u32 = low_bits_mask(ECC_BITS);
-const HIGH_BIT_MASK: u32 = 1 << (u32::BITS - 1);
 
-fn leading_bit(word: u32) -> bool {
-    word & HIGH_BIT_MASK > 0
+const fn bit_set(word: u32, n: usize) -> bool {
+    word & (1 << n) > 0
+}
+
+const fn leading_bit(word: u32) -> bool {
+    bit_set(word, 31)
+}
 }
 
 pub fn from_bits(bits: impl Iterator<Item = bool>) -> u32 {
