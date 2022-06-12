@@ -14,7 +14,7 @@ const ECC_BITS: u32 = 10;
 const PARITY_BITS: u32 = 1;
 
 pub const fn low_bits_mask(n: u32) -> u32 {
-    (1u32 << n) - 1
+    (1 << n) - 1
 }
 
 const ECC_MASK: u32 = low_bits_mask(ECC_BITS);
@@ -24,13 +24,14 @@ const fn bit_set(word: u32, n: u32) -> bool {
     word & (1 << n) > 0
 }
 
-pub fn bits_ms(word: u32) -> impl Iterator<Item = bool> {
-    (0..32).rev().map(move |n| bit_set(word, n))
+fn bits_ms(word: u32) -> impl Iterator<Item = bool> {
+    (0..u32::BITS).rev().map(move |n| bit_set(word, n))
 }
 
-pub fn from_bits(bits: impl Iterator<Item = bool>) -> u32 {
+fn from_bits(bits: impl Iterator<Item = bool>) -> u32 {
     bits.fold(0, |t, n| (t << 1) | (n as u32))
 }
+
 pub fn bch_encode(cw: u32) -> u32 {
     let mut local_cw = cw & PAYLOAD_MASK; // mask off BCH parity and even parity
     let mut cw_e = local_cw;
