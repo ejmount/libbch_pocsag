@@ -5,7 +5,7 @@ pub const fn low_bits_mask(n: u32) -> u32 {
     (1u32 << n) - 1
 }
 
-const HIGHEST_BIT: usize = (u32::BITS - 1) as usize;
+const HIGHEST_BIT: u32 = u32::BITS - 1;
 
 const PAYLOAD_BITS: u32 = 21;
 const ECC_BITS: u32 = 10;
@@ -14,7 +14,7 @@ const PARITY_BITS: u32 = 1;
 const ECC_MASK: u32 = low_bits_mask(ECC_BITS);
 const PAYLOAD_MASK: u32 = !low_bits_mask(ECC_BITS + PARITY_BITS);
 
-const fn bit_set(word: u32, n: usize) -> bool {
+const fn bit_set(word: u32, n: u32) -> bool {
     word & (1 << n) > 0
 }
 
@@ -113,7 +113,7 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
                 // Correct that error and adjust the syndrome to account for it
                 syndrome ^= 0x3B4;
 
-                output = !bit; // !leading_bit(damaged_cw);
+                output = !bit;
 
                 println!("  E"); // indicate that an error was corrected in this bit
             } else {
@@ -124,7 +124,7 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
             }
 
             // Handle Syndrome shift register feedback
-            if syndrome & 0x200 != 0 {
+            if bit_set(syndrome, ECC_BITS - PARITY_BITS) {
                 syndrome <<= 1;
                 syndrome ^= 0x769; // 0x769 = POCSAG generator polynomial -- x^10 + x^9 + x^8 + x^6 + x^5 + x^3 + 1
             } else {
