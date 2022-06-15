@@ -103,7 +103,7 @@ pub const fn bch_encode(cw: u32) -> u32 {
 }
 
 // Attempt to repair the codeword, returning Err if recovery not possible
-pub fn bch_repair(cw: u32) -> Result<u32, ()> {
+pub fn bch_repair(cw: u32) -> Result<u32, u32> {
     // Get "leftover" syndrome
     let syndrome = calculate_syndrome(cw);
 
@@ -113,15 +113,19 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
     }
 
     // Lookup the syndrome
-    if let Some((_, b, c)) = SYNDROME_ERRORS.iter().find(|(s, _, _)| *s == syndrome) {
-        // Retrieve indicces to repair, defaulting to no-op of cw^0
-        let firstbit = 1u32 << b;
-        let secondbit = c.map(|n| 1u32 << n).unwrap_or(0);
+    if let Some((_, b, c)) = SYNDROME_ERRORS
+        .iter()
+        .cloned()
+        .find(|(s, _, _)| *s == syndrome)
+    {
+        // Retrieve indicces to repair, defaulting to xorring with 0, a no-op
+        let firstbit = high_bit(b);
+        let secondbit = c.map(high_bit).unwrap_or(0);
         let corrected = cw ^ firstbit ^ secondbit;
         Ok(bch_encode(corrected)) // Recalculate ECC bits based on the corrected payload
     } else {
         // Did not recognise syndrome value to recover
         dbg!("nonzero syndrome at end");
-        Err(())
+        Err(syndrome)
     }
 }
