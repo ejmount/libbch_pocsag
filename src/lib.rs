@@ -12,8 +12,8 @@ const PAYLOAD_MASK: u32 = !low_bits_mask(ECC_BITS + PARITY_BITS);
 
 const SYNDROME_ERRORS: [(u32, u32, Option<u32>); count_bit_errors()] = enumerate_syndromes();
 
-// Create a mask to exctract the N lowest bits
-pub const fn low_bits_mask(n: u32) -> u32 {
+// Create a mask to extract the N lowest bits
+const fn low_bits_mask(n: u32) -> u32 {
     (1 << n) - 1
 }
 
@@ -56,24 +56,25 @@ const fn count_bit_errors() -> usize {
     double_bits + single_bits
 }
 
-// Produce a list of every possible syndrome value we might encounter
+// Produce a list of every possible syndrome value we might encounter, along with the indices of the bits needing correction
+// Single bit errors are represented by (value, None)
 const fn enumerate_syndromes() -> [(u32, u32, Option<u32>); count_bit_errors()] {
-    const EXAMPLE_WORLD: u32 = bch_encode(0x12340000);
+    const EXAMPLE_WORLD: u32 = bch_encode(0x12340000); // Doesn't matter what this is
 
     let mut output = [(0, 0, None); count_bit_errors()];
     let mut items = 0;
 
-    let mut bit = 0u32;
-    while bit < u32::BITS {
-        let error = high_bit(bit);
+    let mut single_bit = 0;
+    while single_bit < u32::BITS {
+        let error = high_bit(single_bit);
         let corrupted = EXAMPLE_WORLD ^ error;
         let syndrome = calculate_syndrome(corrupted);
-        output[items] = (syndrome, bit, None);
+        output[items] = (syndrome, single_bit, None);
         items += 1;
-        bit += 1;
+        single_bit += 1;
     }
 
-    let mut first_bit = 0u32;
+    let mut first_bit = 0;
     while first_bit < u32::BITS {
         let mut second_bit = 0;
         while second_bit < first_bit {
