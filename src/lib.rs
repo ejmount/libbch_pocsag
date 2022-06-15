@@ -32,18 +32,24 @@ fn from_bits(bits: impl Iterator<Item = bool>) -> u32 {
     bits.fold(0, |t, n| (t << 1) | (n as u32))
 }
 
-pub fn bch_encode(cw: u32) -> u32 {
+const fn get_bch_code(cw: u32) -> u32 {
     let mut local_cw = cw & PAYLOAD_MASK; // mask off BCH parity and even parity
-    let mut cw_e = local_cw;
+
+    let mut count = 0; // Can't do for loops in a const fn
 
     // Calculate BCH bits
-    for _ in 0..PAYLOAD_BITS {
-        if bit_set(cw_e, HIGHEST_BIT) {
-            cw_e ^= 0xED_20_00_00;
+    while count < PAYLOAD_BITS {
+        if bit_set(local_cw, HIGHEST_BIT) {
+            local_cw ^= 0xED_20_00_00;
         }
-        cw_e <<= 1;
+        local_cw <<= 1;
+        count += 1;
     }
-    local_cw |= cw_e >> PAYLOAD_BITS;
+    local_cw >> PAYLOAD_BITS
+}
+
+pub fn bch_encode(cw: u32) -> u32 {
+    let local_cw = (cw & PAYLOAD_MASK) | get_bch_code(cw);
 
     // At this point local_cw contains a codeword with BCH but no parity
 
@@ -55,10 +61,10 @@ pub fn bch_encode(cw: u32) -> u32 {
 }
 
 fn bit_decoder(syndrome: &mut u32) -> impl FnMut(bool) -> bool + '_ {
-    move |bit| {
-        println!("    xbit:{}  synd:{:08X}", bit, syndrome);
+    move |bit: bool| {
+        dbg!("    xbit:{}  synd:{:08X}", bit, &syndrome);
 
-        let output = if SYNDROME_ERRORS.iter().find(|&s| s == syndrome).is_some() {
+        let output = if SYNDROME_ERRORS.iter().find(|&&s| s == *syndrome).is_some() {
             // Syndrome matches an error in the MSB
             // Correct that error and adjust the syndrome to account for it
             *syndrome ^= 0x3B4;
@@ -66,7 +72,7 @@ fn bit_decoder(syndrome: &mut u32) -> impl FnMut(bool) -> bool + '_ {
             !bit
         } else {
             // no error
-            println!("   \n");
+            dbg!("   \n");
             bit
         };
 
@@ -81,8 +87,8 @@ fn bit_decoder(syndrome: &mut u32) -> impl FnMut(bool) -> bool + '_ {
         *syndrome &= low_bits_mask(ECC_BITS + PARITY_BITS);
 
         output
-        // XXX Possible optimisation: Can we exit early if the syndrome is zero? (no more errors to correct)
     }
+    // XXX Possible optimisation: Can we exit early if the syndrome is zero? (no more errors to correct)
 }
 
 pub fn bch_repair(cw: u32) -> Result<u32, ()> {
@@ -107,8 +113,10 @@ pub fn bch_repair(cw: u32) -> Result<u32, ()> {
 
     let result = from_bits(result_bits) << PARITY_BITS;
 
-    let msg = if syndrome == 0 { "OK" } else { "ERR" };
-    dbg!("  orig:{cw:08X}  fixed:{result:08X}  {msg}");
+    dbg!(
+        "  orig:{cw:08X}  fixed:{result:08X}  {}",
+        if syndrome == 0 { "OK" } else { "ERR" }
+    );
 
     // Check if error correction was successful
     if syndrome == 0 {
